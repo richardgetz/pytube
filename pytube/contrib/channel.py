@@ -173,6 +173,21 @@ class Channel(Playlist):
         except:
             return None
 
+    @property
+    def video_count(self):
+        """Get the video count for the channel.
+
+        :rtype: str
+        """
+        try:
+            return self.text_to_number(
+                self.initial_data["header"]["c4TabbedHeaderRenderer"][
+                    "subscriberCountText"
+                ]["simpleText"].split(" ")[0]
+            )
+        except:
+            return None
+
     @staticmethod
     def _extract_videos(raw_json: str) -> Tuple[List[str], Optional[str]]:
         """Extracts videos from a raw json page
