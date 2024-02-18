@@ -183,7 +183,7 @@ class Channel(Playlist):
             return self.text_to_number(
                 self.initial_data["header"]["c4TabbedHeaderRenderer"][
                     "videosCountText"
-                ]["runs"][0]
+                ]["runs"][0]["text"]
             )
         except:
             return None
