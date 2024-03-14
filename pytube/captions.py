@@ -83,23 +83,59 @@ class Caption:
         """
         segments = []
         root = ElementTree.fromstring(xml_captions)
-        for i, child in enumerate(list(root)):
-            text = child.text or ""
-            caption = unescape(text.replace("\n", " ").replace("  ", " "),)
+        try:
+            for i, child in enumerate(list(root)):
+                text = child.text or ""
+                caption = unescape(text.replace("\n", " ").replace("  ", " "),)
+                try:
+                    duration = float(child.attrib["dur"])
+                except KeyError:
+                    duration = 0.0
+                start = float(child.attrib["start"])
+                end = start + duration
+                sequence_number = i + 1  # convert from 0-indexed to 1.
+                line = "{seq}\n{start} --> {end}\n{text}\n".format(
+                    seq=sequence_number,
+                    start=self.float_to_srt_time_format(start),
+                    end=self.float_to_srt_time_format(end),
+                    text=caption,
+                )
+                segments.append(line)
+        except:
             try:
-                duration = float(child.attrib["dur"])
-            except KeyError:
-                duration = 0.0
-            start = float(child.attrib["start"])
-            end = start + duration
-            sequence_number = i + 1  # convert from 0-indexed to 1.
-            line = "{seq}\n{start} --> {end}\n{text}\n".format(
-                seq=sequence_number,
-                start=self.float_to_srt_time_format(start),
-                end=self.float_to_srt_time_format(end),
-                text=caption,
-            )
-            segments.append(line)
+                srt=[]
+                counter = 1
+                for p in root.iter('p'):
+                    # Initial start time and duration
+                    start_time = int(p.attrib['t'])
+                    duration = int(p.attrib.get('d', '0'))
+                    end_time = start_time + duration
+                    
+                    # Convert times into SRT format (hours:minutes:seconds,milliseconds)
+                    start_srt = f"{start_time // 3600000:02}:{(start_time % 3600000) // 60000:02}:{(start_time % 60000) // 1000:02},{start_time % 1000:03}"
+                    end_srt = f"{end_time // 3600000:02}:{(end_time % 3600000) // 60000:02}:{(end_time % 60000) // 1000:02},{end_time % 1000:03}"
+                    
+                    # Construct caption text, considering nested <s> tags for segments
+                    inner_segments = []
+                    for s in p:
+                        seg_text = s.text.replace('&#39;', "'")  # Basic HTML entity handling
+                        if 't' in s.attrib:  # If segment has its own start time, adjust the base start time
+                            seg_start = start_time + int(s.attrib['t'])
+                            seg_text = f"{seg_text}"  # Placeholder for potential future formatting
+                        inner_segments.append(seg_text)
+                    caption_text = ''.join(inner_segments).strip()
+                    
+                    # Skip empty captions
+                    if not caption_text:
+                        continue
+                    
+                    # Append to SRT list
+                    srt.append(f"{counter}\n{start_srt} --> {end_srt}\n{caption_text}\n")
+                    counter += 1
+                return '\n'.join(srt).strip()
+            except Exception as e:
+                print(e)
+                return None
         return "\n".join(segments).strip()
 
     def download(
