@@ -245,7 +245,7 @@ class YouTube:
             return self._vid_info
 
         innertube = InnerTube(
-            client="WEB",
+            client="ANDROID_EMBED",
             use_oauth=self.use_oauth,
             allow_cache=self.allow_oauth_cache,
         )
