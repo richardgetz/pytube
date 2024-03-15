@@ -245,7 +245,7 @@ class YouTube:
             return self._vid_info
 
         innertube = InnerTube(
-            client="ANDROID_EMBED",
+            client="WEB",
             use_oauth=self.use_oauth,
             allow_cache=self.allow_oauth_cache,
         )
@@ -278,6 +278,7 @@ class YouTube:
 
         :rtype: List[Caption]
         """
+        # print(self.vid_info)
         raw_tracks = (
             self.vid_info.get("captions", {})
             .get("playerCaptionsTracklistRenderer", {})

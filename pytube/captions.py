@@ -101,7 +101,8 @@ class Caption:
                     text=caption,
                 )
                 segments.append(line)
-        except:
+        except Exception as e:
+            print("First pass srt failure", e)
             try:
                 srt=[]
                 counter = 1
