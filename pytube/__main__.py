@@ -33,6 +33,7 @@ class YouTube:
         proxies: Dict[str, str] = None,
         use_oauth: bool = False,
         allow_oauth_cache: bool = True,
+        innertube=None,
     ):
         """Construct a :class:`YouTube <YouTube>`.
 
@@ -57,7 +58,7 @@ class YouTube:
         self._js_url: Optional[str] = None  # the url to the js, parsed from watch html
 
         self._vid_info: Optional[Dict] = None  # content fetched from innertube/player
-
+        self.innertube = innertube
         self._watch_html: Optional[str] = None  # the html of /watch?v=<video_id>
         self._embed_html: Optional[str] = None
         self._player_config_args: Optional[Dict] = (
@@ -243,25 +244,26 @@ class YouTube:
         """
         if self._vid_info:
             return self._vid_info
+        if not self.innertube:
+            self.innertube = InnerTube(
+                client="ANDROID_EMBED",
+                use_oauth=self.use_oauth,
+                allow_cache=self.allow_oauth_cache,
+            )
 
-        innertube = InnerTube(
-            client="ANDROID_EMBED",
-            use_oauth=self.use_oauth,
-            allow_cache=self.allow_oauth_cache,
-        )
-
-        innertube_response = innertube.player(self.video_id)
+        innertube_response = self.innertube.player(self.video_id)
         self._vid_info = innertube_response
         return self._vid_info
 
     def bypass_age_gate(self):
         """Attempt to update the vid_info by bypassing the age gate."""
-        innertube = InnerTube(
-            client="ANDROID",
-            use_oauth=self.use_oauth,
-            allow_cache=self.allow_oauth_cache,
-        )
-        innertube_response = innertube.player(self.video_id)
+        if not self.innertube:
+            self.innertube = InnerTube(
+                client="ANDROID",
+                use_oauth=self.use_oauth,
+                allow_cache=self.allow_oauth_cache,
+            )
+        innertube_response = self.innertube.player(self.video_id)
 
         playability_status = innertube_response["playabilityStatus"].get("status", None)
 
@@ -278,7 +280,6 @@ class YouTube:
 
         :rtype: List[Caption]
         """
-        # print(self.vid_info)
         raw_tracks = (
             self.vid_info.get("captions", {})
             .get("playerCaptionsTracklistRenderer", {})
@@ -471,7 +472,7 @@ class YouTube:
         self.stream_monostate.on_complete = func
 
     @staticmethod
-    def from_id(video_id: str) -> "YouTube":
+    def from_id(video_id: str, innertube=None) -> "YouTube":
         """Construct a :class:`YouTube <YouTube>` object from a video id.
 
         :param str video_id:
@@ -480,4 +481,4 @@ class YouTube:
         :rtype: :class:`YouTube <YouTube>`
 
         """
-        return YouTube(f"https://www.youtube.com/watch?v={video_id}")
+        return YouTube(f"https://www.youtube.com/watch?v={video_id}", innertube=innertube)
