@@ -5,7 +5,7 @@ import json
 import xml.etree.ElementTree as ElementTree
 from html import unescape
 from typing import Dict, Optional
-
+import html
 from pytube import request
 from pytube.helpers import safe_filename, target_directory
 
@@ -74,7 +74,13 @@ class Caption:
         time_fmt = time.strftime("%H:%M:%S,", time.gmtime(whole))
         ms = f"{fraction:.3f}".replace("0.", "")
         return time_fmt + ms
-
+    def convert_time(self, ms):
+        """Convert milliseconds to SRT time format."""
+        hours = ms // 3600000
+        minutes = (ms % 3600000) // 60000
+        seconds = (ms % 60000) // 1000
+        milliseconds = ms % 1000
+        return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
     def xml_caption_to_srt(self, xml_captions: str) -> str:
         """Convert xml caption tracks to "SubRip Subtitle (srt)".
 
@@ -113,8 +119,8 @@ class Caption:
                     end_time = start_time + duration
                     
                     # Convert times into SRT format (hours:minutes:seconds,milliseconds)
-                    start_srt = f"{start_time // 3600000:02}:{(start_time % 3600000) // 60000:02}:{(start_time % 60000) // 1000:02},{start_time % 1000:03}"
-                    end_srt = f"{end_time // 3600000:02}:{(end_time % 3600000) // 60000:02}:{(end_time % 60000) // 1000:02},{end_time % 1000:03}"
+                    start_srt = self.convert_time(start_time)
+                    end_srt = self.convert_time(end_time)
                     
                     # Construct caption text, considering nested <s> tags for segments
                     inner_segments = []
@@ -133,7 +139,22 @@ class Caption:
                     # Append to SRT list
                     srt.append(f"{counter}\n{start_srt} --> {end_srt}\n{caption_text}\n")
                     counter += 1
-                return '\n'.join(srt).strip()
+                if len(srt) >0:
+                    return '\n'.join(srt).strip()
+                else:
+                    srt_content = []
+
+                    for i, p in enumerate(root.find('body'), start=1):
+                        start_time = int(p.attrib['t'])
+                        duration = int(p.attrib['d'])
+                        end_time = start_time + duration
+                        start_srt = self.convert_time(start_time)
+                        end_srt = self.convert_time(end_time)
+                        text = html.unescape(p.text).replace("\n", " ").strip()
+
+                        srt_content.append(f"{i}\n{start_srt} --> {end_srt}\n{text}\n")
+
+                    return "\n".join(srt_content)
             except Exception as e:
                 print(e)
                 return None
