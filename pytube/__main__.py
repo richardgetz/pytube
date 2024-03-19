@@ -65,6 +65,8 @@ class YouTube:
             None  # inline js in the html containing
         )
         self._age_restricted: Optional[bool] = None
+        self._paid_promotion_overlay: Optional[bool] = None
+        self._ai_content_overlay: Optional[bool] = None
 
         self._fmt_streams: Optional[List[Stream]] = None
 
@@ -119,6 +121,33 @@ class YouTube:
             return self._age_restricted
         self._age_restricted = extract.is_age_restricted(self.watch_html)
         return self._age_restricted
+
+    @property
+    def paid_promotion_overlay(self):
+        if self._paid_promotion_overlay != None:
+            return self._paid_promotion_overlay
+        if "paidContentOverlay" in str(
+            self.vid_info.get("playerOverlayLayerRenderers", {})
+        ):
+            self._paid_promotion_overlay = True
+        else:
+            self._paid_promotion_overlay = False
+
+        return self._paid_promotion_overlay
+
+    @property
+    def ai_content_overlay(self):
+        if self._ai_content_overlay != None:
+            return self._ai_content_overlay
+        if (
+            "altered or synthetic content"
+            in str(self.vid_info.get("playerOverlayLayerRenderers", {})).lower()
+        ):
+            self._ai_content_overlay = True
+        else:
+            self._ai_content_overlay = False
+
+        return self._ai_content_overlay
 
     @property
     def js_url(self):
@@ -481,4 +510,6 @@ class YouTube:
         :rtype: :class:`YouTube <YouTube>`
 
         """
-        return YouTube(f"https://www.youtube.com/watch?v={video_id}", innertube=innertube)
+        return YouTube(
+            f"https://www.youtube.com/watch?v={video_id}", innertube=innertube
+        )
