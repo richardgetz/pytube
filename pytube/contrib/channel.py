@@ -2,9 +2,10 @@
 """Module for interacting with a user's youtube channel."""
 import json
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 
-from pytube import extract, Playlist, request
+from pytube import Playlist, extract, request
 from pytube.helpers import uniqueify
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,10 @@ class Channel(Playlist):
         self._about_html = None
         self._subscriber_count = None
 
+        self._about_json = None
+        self._videos_json = None
+        self._about_metadata_json = None
+
     @property
     def channel_name(self):
         """Get the name of the YouTube channel.
@@ -67,6 +72,48 @@ class Channel(Playlist):
         return self.initial_data["metadata"]["channelMetadataRenderer"].get(
             "vanityChannelUrl", None
         )  # noqa:E501
+
+    @property
+    def about_metadata_json(self):
+        """Get the json for the /about page.
+
+        :rtype: str
+        """
+        if self._about_metadata_json:
+            return self._about_metadata_json
+        else:
+            self._about_metadata_json = self.about_json["onResponseReceivedEndpoints"][
+                0
+            ]["showEngagementPanelEndpoint"]["engagementPanel"][
+                "engagementPanelSectionListRenderer"
+            ][
+                "content"
+            ][
+                "sectionListRenderer"
+            ][
+                "contents"
+            ][
+                0
+            ][
+                "itemSectionRenderer"
+            ][
+                "contents"
+            ][
+                0
+            ][
+                "aboutChannelRenderer"
+            ][
+                "metadata"
+            ]
+            return self._about_metadata_json
+
+    @property
+    def total_view_count(self):
+        """Get the total view count for the channel.
+
+        :rtype: str
+        """
+        return self.about_metadata_json
 
     @property
     def html(self):
@@ -120,6 +167,32 @@ class Channel(Playlist):
         else:
             self._featured_channels_html = request.get(self.featured_channels_url)
             return self._featured_channels_html
+
+    @property
+    def about_json(self):
+        """Get the json for the /about page.
+
+        :rtype: str
+        """
+
+        if self._about_json:
+            return self._about_json
+        else:
+            self._about_json = self.extract_yt_initial_data(self.about_html)
+            return self._about_json
+
+    @property
+    def videos_json(self):
+        """Get the json for the /videos page page.
+
+        :rtype: str
+        """
+
+        if self._videos_json:
+            return self._videos_json
+        else:
+            self._videos_json = self.extract_yt_initial_data(self.html)
+            return self._videos_json
 
     @property
     def about_html(self):
@@ -187,6 +260,27 @@ class Channel(Playlist):
             )
         except:
             return None
+
+    def extract_yt_initial_data(self, html):
+        """
+        Extracts the ytInitialData JSON from HTML content and converts it to a Python dictionary.
+
+        Args:
+        html_content (str): The HTML content as a string.
+
+        Returns:
+        dict: The extracted JSON data as a Python dictionary or None if the JSON data could not be found.
+        """
+        if html:
+            pattern = r"var ytInitialData = ({.*?});</script>"
+            match = re.search(pattern, html, re.DOTALL)
+            if not match:
+                raise ValueError("ytInitialData not found in the provided HTML.")
+
+            json_data = json.loads(match.group(1))
+
+            return json_data
+        return None
 
     @staticmethod
     def _extract_videos(raw_json: str) -> Tuple[List[str], Optional[str]]:
