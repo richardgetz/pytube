@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 from pytube import Playlist, extract, request
@@ -104,8 +105,18 @@ class Channel(Playlist):
                 "aboutChannelRenderer"
             ][
                 "metadata"
+            ][
+                "aboutChannelViewModel"
             ]
             return self._about_metadata_json
+
+    @property
+    def description(self):
+        """Get the description for the channel.
+
+        :rtype: str
+        """
+        return self.about_metadata_json["description"]
 
     @property
     def total_view_count(self):
@@ -113,7 +124,29 @@ class Channel(Playlist):
 
         :rtype: str
         """
-        return self.about_metadata_json
+        return int(
+            self.about_metadata_json["viewCountText"]
+            .split(" views")[0]
+            .replace(",", "")
+        )
+
+    @property
+    def date_joined(self):
+        """Get the date the channel was created.
+
+        :rtype: datetime object
+        """
+        try:
+            date_obj = datetime.strptime(
+                self.about_metadata_json["joinedDateText"]["content"].split("Joined ")[
+                    -1
+                ],
+                "%b %d, %Y",
+            )
+            return date_obj
+        except Exception as e:
+            print(e)
+            return None
 
     @property
     def html(self):
@@ -194,6 +227,58 @@ class Channel(Playlist):
             self._videos_json = self.extract_yt_initial_data(self.html)
             return self._videos_json
 
+    def _find_content_list(self, data):
+        for tab in data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]:
+            if tab.get("tabRenderer", {}).get("content"):
+                return tab["tabRenderer"]["content"]["richGridRenderer"]["contents"]
+        return None
+
+    def _parse_contents(self, contents):
+        new_contents = []
+        for content in contents:
+            sub_content = {}
+            if content.get("richItemRenderer"):
+                sub_content["id"] = content["richItemRenderer"]["content"][
+                    "videoRenderer"
+                ]["videoId"]
+                sub_content["title"] = " ".join(
+                    [
+                        run["text"]
+                        for run in content["richItemRenderer"]["content"][
+                            "videoRenderer"
+                        ]["title"]["runs"]
+                    ]
+                )
+                try:
+                    sub_content["views"] = int(
+                        content["richItemRenderer"]["content"]["videoRenderer"][
+                            "viewCountText"
+                        ]["simpleText"]
+                        .split(" ")[0]
+                        .replace(",", "")
+                    )
+                except:
+                    sub_content["views"] = None
+                sub_content["description"] = " ".join(
+                    [
+                        run["text"]
+                        for run in content["richItemRenderer"]["content"][
+                            "videoRenderer"
+                        ]["descriptionSnippet"]["runs"]
+                    ]
+                )
+                new_contents.append(sub_content)
+        return new_contents
+
+    @property
+    def recent_videos(self):
+        contents = self._find_content_list(self.videos_json)
+        if contents:
+            updated_contents = self._parse_contents(contents)
+            return updated_contents
+
+        return None
+
     @property
     def about_html(self):
         """Get the html for the /about page.
@@ -207,6 +292,15 @@ class Channel(Playlist):
         else:
             self._about_html = request.get(self.about_url)
             return self._about_html
+
+    def search_videos(self, query):
+        search_html = request.get(f"{self.channel_url}/search?q={query}")
+
+        contents = self._find_content_list(self.extract_yt_initial_data(search_html))
+        if contents:
+            updated_contents = self._parse_contents(contents)
+            return updated_contents
+        return None
 
     def text_to_number(self, text):
         # Define a dictionary mapping suffixes to their multiplication factors
@@ -247,18 +341,61 @@ class Channel(Playlist):
             return None
 
     @property
+    def country(self):
+        """Get the video count for the channel.
+
+        :rtype: str
+        """
+        try:
+            return self.about_metadata_json["country"]
+
+        except:
+            return None
+
+    @property
     def video_count(self):
         """Get the video count for the channel.
 
         :rtype: str
         """
         try:
-            return self.text_to_number(
-                self.initial_data["header"]["c4TabbedHeaderRenderer"][
-                    "videosCountText"
-                ]["runs"][0]["text"]
+            return int(
+                self.about_metadata_json["videoCountText"]
+                .split(" videos")[0]
+                .replace(",", "")
             )
         except:
+            return None
+
+    def extract_ytcfg_json(self, html):
+        """
+        Extracts the JSON object from a script tag that contains 'ytcfg.set(' in a given HTML string using regular expressions.
+
+        Args:
+        html (str): The HTML string to parse.
+
+        Returns:
+        dict: The extracted JSON object, or None if no matching script tag is found.
+        """
+        # Define a regex pattern to find 'ytcfg.set({<json_here>})'
+        pattern = r"ytcfg.set\((\{.*?\})\);"
+
+        # Search for the pattern in the HTML
+        match = re.search(pattern, html, re.DOTALL)
+
+        if match:
+            # Extract the JSON string
+            json_str = match.group(1)
+
+            try:
+                # Convert JSON string to a Python dictionary
+                json_data = json.loads(json_str)
+                return json_data
+            except json.JSONDecodeError as e:
+                print("Error decoding JSON: ", e)
+                return None
+        else:
+            print("No 'ytcfg.set()' found in the HTML.")
             return None
 
     def extract_yt_initial_data(self, html):

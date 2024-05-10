@@ -351,7 +351,11 @@ class InnerTube:
         )
         return json.loads(response.read())
 
-    def browse(self):
+    def browse(
+        self,
+        channel_id=None,
+        query=None,
+    ):
         """Make a request to the browse endpoint.
 
         TODO: Figure out how we can use this
