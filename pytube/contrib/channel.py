@@ -8,12 +8,20 @@ from typing import Dict, List, Optional, Tuple
 
 from pytube import Playlist, extract, request
 from pytube.helpers import uniqueify
+from pytube.innertube import InnerTube
 
 logger = logging.getLogger(__name__)
 
 
 class Channel(Playlist):
-    def __init__(self, url: str, proxies: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        url: str,
+        proxies: Optional[Dict[str, str]] = None,
+        use_oauth: bool = False,
+        allow_oauth_cache: bool = True,
+        innertube=None,
+    ):
         """Construct a :class:`Channel <Channel>`.
 
         :param str url:
@@ -43,6 +51,9 @@ class Channel(Playlist):
         self._about_json = None
         self._videos_json = None
         self._about_metadata_json = None
+        self.use_oauth = use_oauth
+        self.allow_oauth_cache = allow_oauth_cache
+        self.innertube = innertube
 
     @property
     def channel_name(self):
@@ -228,17 +239,34 @@ class Channel(Playlist):
             return self._videos_json
 
     def _find_content_list(self, data):
-        for tab in data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]:
-            if tab.get("tabRenderer", {}).get("content"):
-                return tab["tabRenderer"]["content"]["richGridRenderer"]["contents"]
+        if data.get("contents"):
+            for tab in data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]:
+                if tab.get("tabRenderer", {}).get("content"):
+                    return tab["tabRenderer"]["content"]["richGridRenderer"]["contents"]
+        return None
+
+    def _find_searched_content_list(self, data):
+        if data.get("contents"):
+            for tab in data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]:
+                if not tab.get("expandableTabRenderer"):
+                    continue
+                return tab["expandableTabRenderer"]["content"]["sectionListRenderer"][
+                    "contents"
+                ]
+        elif data.get("onResponseReceivedActions"):
+            if data["onResponseReceivedActions"]:
+                return data["onResponseReceivedActions"][0][
+                    "appendContinuationItemsAction"
+                ].get("continuationItems")
         return None
 
     def _parse_contents(self, contents):
         new_contents = []
+        continuation_token = None
         for content in contents:
             sub_content = {}
             if content.get("richItemRenderer"):
-                sub_content["id"] = content["richItemRenderer"]["content"][
+                sub_content["video_id"] = content["richItemRenderer"]["content"][
                     "videoRenderer"
                 ]["videoId"]
                 sub_content["title"] = " ".join(
@@ -259,22 +287,58 @@ class Channel(Playlist):
                     )
                 except:
                     sub_content["views"] = None
-                sub_content["description"] = " ".join(
-                    [
-                        run["text"]
-                        for run in content["richItemRenderer"]["content"][
-                            "videoRenderer"
-                        ]["descriptionSnippet"]["runs"]
-                    ]
-                )
+                try:
+                    sub_content["description"] = " ".join(
+                        [
+                            run["text"]
+                            for run in content["richItemRenderer"]["content"][
+                                "videoRenderer"
+                            ]["descriptionSnippet"]["runs"]
+                        ]
+                    )
+                except:
+                    sub_content["description"] = None
                 new_contents.append(sub_content)
-        return new_contents
+            elif content.get("itemSectionRenderer"):
+                video_renderer = content["itemSectionRenderer"]["contents"][0][
+                    "videoRenderer"
+                ]
+                sub_content["video_id"] = video_renderer["videoId"]
+                sub_content["title"] = " ".join(
+                    [run["text"] for run in video_renderer["title"]["runs"]]
+                )
+                try:
+                    sub_content["description"] = " ".join(
+                        [
+                            run["text"]
+                            for run in video_renderer["descriptionSnippet"]["runs"]
+                        ]
+                    )
+                except:
+                    sub_content["description"] = None
+                try:
+                    sub_content["views"] = int(
+                        video_renderer["viewCountText"]["simpleText"]
+                        .split(" ")[0]
+                        .replace(",", "")
+                    )
+                except:
+                    sub_content["views"] = None
+                new_contents.append(sub_content)
+            elif content.get("continuationItemRenderer"):
+                try:
+                    continuation_token = content["continuationItemRenderer"][
+                        "continuationEndpoint"
+                    ]["continuationCommand"]["token"]
+                except:
+                    pass
+        return new_contents, continuation_token
 
     @property
     def recent_videos(self):
         contents = self._find_content_list(self.videos_json)
         if contents:
-            updated_contents = self._parse_contents(contents)
+            updated_contents, _ = self._parse_contents(contents)
             return updated_contents
 
         return None
@@ -293,14 +357,22 @@ class Channel(Playlist):
             self._about_html = request.get(self.about_url)
             return self._about_html
 
-    def search_videos(self, query):
-        search_html = request.get(f"{self.channel_url}/search?q={query}")
-
-        contents = self._find_content_list(self.extract_yt_initial_data(search_html))
-        if contents:
-            updated_contents = self._parse_contents(contents)
-            return updated_contents
-        return None
+    def search_videos(self, query, continuation_token=None):
+        if not self.innertube:
+            self.innertube = InnerTube(
+                client="WEB",
+                use_oauth=self.use_oauth,
+                allow_cache=self.allow_oauth_cache,
+            )
+        response = self.innertube.browse(
+            self.channel_id, query=query, continuation_token=continuation_token
+        )
+        if response:
+            contents = self._find_searched_content_list(response)
+            if contents:
+                updated_contents, continuation_token = self._parse_contents(contents)
+                return updated_contents, continuation_token
+        return None, None
 
     def text_to_number(self, text):
         # Define a dictionary mapping suffixes to their multiplication factors
@@ -398,6 +470,7 @@ class Channel(Playlist):
             print("No 'ytcfg.set()' found in the HTML.")
             return None
 
+    # TODO: does this already exist in extract.initial_data??
     def extract_yt_initial_data(self, html):
         """
         Extracts the ytInitialData JSON from HTML content and converts it to a Python dictionary.

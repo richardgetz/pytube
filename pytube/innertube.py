@@ -351,18 +351,23 @@ class InnerTube:
         )
         return json.loads(response.read())
 
-    def browse(
-        self,
-        channel_id=None,
-        query=None,
-    ):
+    def browse(self, channel_id=None, query=None, continuation_token=None):
         """Make a request to the browse endpoint.
 
         TODO: Figure out how we can use this
         """
-        # endpoint = f'{self.base_url}/browse'  # noqa:E800
-        ...
-        # return self._call_api(endpoint, query, self.base_data)  # noqa:E800
+        endpoint = f"{self.base_url}/browse"  # noqa:E800
+        if not continuation_token:
+            post_data = {
+                "browseId": channel_id,
+                "query": query,
+                "params": "EgZzZWFyY2jyBgQKAloA",
+            }
+        else:
+            post_data = {"continuation": continuation_token}
+        post_data.update(self.base_data)
+        query_data = {"prettyPrint": False}
+        return self._call_api(endpoint, query_data, post_data)  # noqa:E800
 
     def config(self):
         """Make a request to the config endpoint.
