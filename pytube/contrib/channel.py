@@ -94,32 +94,42 @@ class Channel(Playlist):
         if self._about_metadata_json:
             return self._about_metadata_json
         else:
-            self._about_metadata_json = self.about_json["onResponseReceivedEndpoints"][
-                0
-            ]["showEngagementPanelEndpoint"]["engagementPanel"][
-                "engagementPanelSectionListRenderer"
-            ][
-                "content"
-            ][
-                "sectionListRenderer"
-            ][
-                "contents"
-            ][
-                0
-            ][
-                "itemSectionRenderer"
-            ][
-                "contents"
-            ][
-                0
-            ][
-                "aboutChannelRenderer"
-            ][
-                "metadata"
-            ][
-                "aboutChannelViewModel"
-            ]
-            return self._about_metadata_json
+            if self.about_json.get("onResponseReceivedEndpoints"):
+                try:
+                    self._about_metadata_json = self.about_json[
+                        "onResponseReceivedEndpoints"
+                    ][0]["showEngagementPanelEndpoint"]["engagementPanel"][
+                        "engagementPanelSectionListRenderer"
+                    ][
+                        "content"
+                    ][
+                        "sectionListRenderer"
+                    ][
+                        "contents"
+                    ][
+                        0
+                    ][
+                        "itemSectionRenderer"
+                    ][
+                        "contents"
+                    ][
+                        0
+                    ][
+                        "aboutChannelRenderer"
+                    ][
+                        "metadata"
+                    ][
+                        "aboutChannelViewModel"
+                    ]
+                    return self._about_metadata_json
+                except Exception as e:
+                    print(e)
+                    return None
+            elif self.about_json.get("metadata"):
+                self._about_metadata_json = self.about_json["metadata"][
+                    "channelMetadataRenderer"
+                ]
+                return self._about_metadata_json
 
     @property
     def description(self):
@@ -242,7 +252,24 @@ class Channel(Playlist):
         if data.get("contents"):
             for tab in data["contents"]["twoColumnBrowseResultsRenderer"]["tabs"]:
                 if tab.get("tabRenderer", {}).get("content"):
-                    return tab["tabRenderer"]["content"]["richGridRenderer"]["contents"]
+
+                    if (
+                        tab["tabRenderer"]["content"]
+                        .get("richGridRenderer", {})
+                        .get("contents")
+                    ):
+                        return tab["tabRenderer"]["content"]["richGridRenderer"][
+                            "contents"
+                        ]
+                    if (
+                        tab["tabRenderer"]["content"]
+                        .get("sectionListRenderer", {})
+                        .get("contents")
+                    ):
+                        return tab["tabRenderer"]["content"]["sectionListRenderer"][
+                            "contents"
+                        ]
+
         return None
 
     def _find_searched_content_list(self, data):
@@ -300,30 +327,31 @@ class Channel(Playlist):
                     sub_content["description"] = None
                 new_contents.append(sub_content)
             elif content.get("itemSectionRenderer"):
-                video_renderer = content["itemSectionRenderer"]["contents"][0][
-                    "videoRenderer"
-                ]
-                sub_content["video_id"] = video_renderer["videoId"]
-                sub_content["title"] = " ".join(
-                    [run["text"] for run in video_renderer["title"]["runs"]]
-                )
-                try:
-                    sub_content["description"] = " ".join(
-                        [
-                            run["text"]
-                            for run in video_renderer["descriptionSnippet"]["runs"]
-                        ]
+                if content["itemSectionRenderer"]["contents"][0].get("videoRenderer"):
+                    video_renderer = content["itemSectionRenderer"]["contents"][0][
+                        "videoRenderer"
+                    ]
+                    sub_content["video_id"] = video_renderer["videoId"]
+                    sub_content["title"] = " ".join(
+                        [run["text"] for run in video_renderer["title"]["runs"]]
                     )
-                except:
-                    sub_content["description"] = None
-                try:
-                    sub_content["views"] = int(
-                        video_renderer["viewCountText"]["simpleText"]
-                        .split(" ")[0]
-                        .replace(",", "")
-                    )
-                except:
-                    sub_content["views"] = None
+                    try:
+                        sub_content["description"] = " ".join(
+                            [
+                                run["text"]
+                                for run in video_renderer["descriptionSnippet"]["runs"]
+                            ]
+                        )
+                    except:
+                        sub_content["description"] = None
+                    try:
+                        sub_content["views"] = int(
+                            video_renderer["viewCountText"]["simpleText"]
+                            .split(" ")[0]
+                            .replace(",", "")
+                        )
+                    except:
+                        sub_content["views"] = None
                 new_contents.append(sub_content)
             elif content.get("continuationItemRenderer"):
                 try:
