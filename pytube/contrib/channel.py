@@ -433,10 +433,9 @@ class Channel(Playlist):
         """
         try:
             return self.text_to_number(
-                self.initial_data["header"]["c4TabbedHeaderRenderer"][
-                    "subscriberCountText"
-                ]["simpleText"].split(" ")[0]
+                self.about_metadata_json["subscriberCountText"].split(" ")[0]
             )
+
         except:
             return None
 
