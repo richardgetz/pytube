@@ -308,7 +308,6 @@ def get_throttling_function_code(js: str) -> str:
     pattern_start = r"%s=function\(\w\)" % name
     regex = re.compile(pattern_start)
     match = regex.search(js)
-
     # Extract the code within curly braces for the function itself, and merge any split lines
     code_lines_list = find_object_from_startpoint(js, match.span()[1]).split("\n")
     joined_lines = "".join(code_lines_list)
@@ -330,7 +329,6 @@ def get_throttling_function_array(js: str) -> List[Any]:
     array_start = r",c=\["
     array_regex = re.compile(array_start)
     match = array_regex.search(raw_code)
-
     array_raw = find_object_from_startpoint(raw_code, match.span()[1] - 1)
     str_array = throttling_array_split(array_raw)
 
@@ -408,26 +406,28 @@ def get_throttling_plan(js: str):
     :returns:
         The full function code for computing the throttlign parameter.
     """
-    raw_code = get_throttling_function_code(js)
+    try:
+        raw_code = get_throttling_function_code(js)
 
-    transform_start = r"try{"
-    plan_regex = re.compile(transform_start)
-    match = plan_regex.search(raw_code)
+        transform_start = r"try{"
+        plan_regex = re.compile(transform_start)
+        match = plan_regex.search(raw_code)
+        transform_plan_raw = find_object_from_startpoint(raw_code, match.span()[1] - 1)
 
-    transform_plan_raw = find_object_from_startpoint(raw_code, match.span()[1] - 1)
+        # Steps are either c[x](c[y]) or c[x](c[y],c[z])
+        step_start = r"c\[(\d+)\]\(c\[(\d+)\](,c(\[(\d+)\]))?\)"
+        step_regex = re.compile(step_start)
+        matches = step_regex.findall(transform_plan_raw)
+        transform_steps = []
+        for match in matches:
+            if match[4] != "":
+                transform_steps.append((match[0], match[1], match[4]))
+            else:
+                transform_steps.append((match[0], match[1]))
 
-    # Steps are either c[x](c[y]) or c[x](c[y],c[z])
-    step_start = r"c\[(\d+)\]\(c\[(\d+)\](,c(\[(\d+)\]))?\)"
-    step_regex = re.compile(step_start)
-    matches = step_regex.findall(transform_plan_raw)
-    transform_steps = []
-    for match in matches:
-        if match[4] != "":
-            transform_steps.append((match[0], match[1], match[4]))
-        else:
-            transform_steps.append((match[0], match[1]))
-
-    return transform_steps
+        return transform_steps
+    except Exception as e:
+        return []
 
 
 def reverse(arr: List, _: Optional[Any]):
