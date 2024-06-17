@@ -287,6 +287,23 @@ class Channel(Playlist):
                 ].get("continuationItems")
         return None
 
+    def time_to_seconds(self, time_str):
+        parts = time_str.split(":")
+        parts = [int(part) for part in parts]
+
+        if len(parts) == 2:
+            minutes, seconds = parts
+            hours = 0
+        elif len(parts) == 3:
+            hours, minutes, seconds = parts
+        else:
+            raise ValueError(
+                "Invalid time format. Please use HH:MM:SS or MM:SS format."
+            )
+
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+        return total_seconds
+
     def _parse_contents(self, contents):
         new_contents = []
         continuation_token = None
@@ -314,6 +331,15 @@ class Channel(Playlist):
                     )
                 except:
                     sub_content["views"] = None
+                try:
+                    sub_content["duration"] = self.time_to_seconds(
+                        content["richItemRenderer"]["content"]["videoRenderer"][
+                            "lengthText"
+                        ]["simpleText"]
+                    )
+
+                except:
+                    sub_content["duration"] = None
                 try:
                     sub_content["description"] = " ".join(
                         [
