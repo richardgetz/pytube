@@ -40,6 +40,7 @@ class Channel(Playlist):
         self.community_url = self.channel_url + "/community"
         self.featured_channels_url = self.channel_url + "/channels"
         self.about_url = self.channel_url + "/about"
+        self.shorts_url = self.channel_url + "/shorts"
 
         # Possible future additions
         self._playlists_html = None
@@ -47,9 +48,11 @@ class Channel(Playlist):
         self._featured_channels_html = None
         self._about_html = None
         self._subscriber_count = None
+        self._shorts_html = None
 
         self._about_json = None
         self._videos_json = None
+        self._shorts_json = None
         self._about_metadata_json = None
         self.use_oauth = use_oauth
         self.allow_oauth_cache = allow_oauth_cache
@@ -236,6 +239,19 @@ class Channel(Playlist):
             return self._about_json
 
     @property
+    def shorts_json(self):
+        """Get the json for the /shorts page.
+
+        :rtype: str
+        """
+
+        if self._shorts_json:
+            return self._shorts_json
+        else:
+            self._shorts_json = self.extract_yt_initial_data(self.shorts_html)
+            return self._shorts_json
+
+    @property
     def videos_json(self):
         """Get the json for the /videos page page.
 
@@ -310,45 +326,47 @@ class Channel(Playlist):
         for content in contents:
             sub_content = {}
             if content.get("richItemRenderer"):
-                sub_content["video_id"] = content["richItemRenderer"]["content"][
-                    "videoRenderer"
-                ]["videoId"]
-                sub_content["title"] = " ".join(
-                    [
-                        run["text"]
-                        for run in content["richItemRenderer"]["content"][
-                            "videoRenderer"
-                        ]["title"]["runs"]
-                    ]
-                )
-                try:
-                    sub_content["views"] = int(
-                        content["richItemRenderer"]["content"]["videoRenderer"][
-                            "viewCountText"
-                        ]["simpleText"]
-                        .split(" ")[0]
-                        .replace(",", "")
+                rich_item = content["richItemRenderer"]["content"]
+                if rich_item.get("videoRenderer"):
+                    renderer_type = "videoRenderer"
+                elif rich_item.get("reelItemRenderer"):
+                    renderer_type = "reelItemRenderer"
+                print(renderer_type)
+                if not renderer_type:
+                    continue
+
+                item = rich_item[renderer_type]
+                sub_content["video_id"] = item["videoId"]
+                if item.get("title"):
+                    sub_content["title"] = " ".join(
+                        [run["text"] for run in item["title"]["runs"]]
                     )
+                elif item.get("headline", {}).get("simpleText"):
+                    sub_content["title"] = item["headline"]["simpleText"]
+                try:
+                    if item.get("viewCountText", {}).get("simpleText"):
+                        sub_content["views"] = (
+                            item["viewCountText"]["simpleText"]
+                            .split(" ")[0]
+                            .replace(",", "")
+                        )
+
                 except:
                     sub_content["views"] = None
+
                 try:
-                    sub_content["duration"] = self.time_to_seconds(
-                        content["richItemRenderer"]["content"]["videoRenderer"][
-                            "lengthText"
-                        ]["simpleText"]
-                    )
+                    if item.get("lengthText", {}).get("simpleText"):
+                        sub_content["duration"] = self.time_to_seconds(
+                            item["lengthText"]["simpleText"]
+                        )
 
                 except:
                     sub_content["duration"] = None
                 try:
-                    sub_content["description"] = " ".join(
-                        [
-                            run["text"]
-                            for run in content["richItemRenderer"]["content"][
-                                "videoRenderer"
-                            ]["descriptionSnippet"]["runs"]
-                        ]
-                    )
+                    if item.get("descriptionSnippet", {}).get("runs", []):
+                        sub_content["description"] = " ".join(
+                            [run["text"] for run in item["descriptionSnippet"]["runs"]]
+                        )
                 except:
                     sub_content["description"] = None
                 new_contents.append(sub_content)
@@ -398,6 +416,15 @@ class Channel(Playlist):
         return None
 
     @property
+    def recent_shorts(self):
+        contents = self._find_content_list(self.shorts_json)
+        if contents:
+            updated_contents, _ = self._parse_contents(contents)
+            return updated_contents
+
+        return None
+
+    @property
     def about_html(self):
         """Get the html for the /about page.
 
@@ -410,6 +437,20 @@ class Channel(Playlist):
         else:
             self._about_html = request.get(self.about_url)
             return self._about_html
+
+    @property
+    def shorts_html(self):
+        """Get the html for the /shorts page.
+
+        Currently unused for any functionality.
+
+        :rtype: str
+        """
+        if self._shorts_html:
+            return self._shorts_html
+        else:
+            self._shorts_html = request.get(self.shorts_url)
+            return self._shorts_html
 
     def search_videos(self, query, continuation_token=None):
         if not self.innertube:
