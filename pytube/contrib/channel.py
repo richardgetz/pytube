@@ -331,7 +331,6 @@ class Channel(Playlist):
                     renderer_type = "videoRenderer"
                 elif rich_item.get("reelItemRenderer"):
                     renderer_type = "reelItemRenderer"
-                print(renderer_type)
                 if not renderer_type:
                     continue
 
