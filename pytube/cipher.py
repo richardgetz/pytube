@@ -264,8 +264,11 @@ def get_throttling_function_name(js: str) -> str:
         # a.C && (b = a.get("n")) && (b = Bpa[0](b), a.set("n", b),
         # Bpa.length || iha("")) }};
         # In the above case, `iha` is the relevant function name
-        r'a\.[a-zA-Z]\s*&&\s*\([a-z]\s*=\s*a\.get\("n"\)\)\s*&&\s*'
-        r"\([a-z]\s*=\s*([a-zA-Z0-9$]+)(\[\d+\])?\([a-z]\)",
+        # OLD:
+        # r'a\.[a-zA-Z]\s*&&\s*\([a-z]\s*=\s*a\.get\("n"\)\)\s*&&\s*'
+        # r"\([a-z]\s*=\s*([a-zA-Z0-9$]+)(\[\d+\])?\([a-z]\)",
+        r'a\.[a-zA-Z]\s*&&\s*\([a-z]\s*=\s*a\.get\("n"\)\)\s*&&.*?\|\|\s*([a-z]+)',
+        r"\([a-z]\s*=\s*([a-zA-Z0-9$]+)(\[\d+\])\([a-z]\)",
     ]
     logger.debug("Finding throttling function name")
     for pattern in function_patterns:
@@ -288,7 +291,7 @@ def get_throttling_function_name(js: str) -> str:
                     array = array.group(1).strip("[]").split(",")
                     array = [x.strip() for x in array]
                     return array[int(idx)]
-
+    logger.debug("Could not find throttling function here: %s", js)
     raise RegexMatchError(caller="get_throttling_function_name", pattern="multiple")
 
 
