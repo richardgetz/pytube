@@ -12,8 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import pytube
 import pytube.exceptions as exceptions
-from pytube import extract, request
-from pytube import Stream, StreamQuery
+from pytube import Stream, StreamQuery, extract, request
 from pytube.helpers import install_proxy
 from pytube.innertube import InnerTube
 from pytube.metadata import YouTubeMetadata
@@ -501,7 +500,7 @@ class YouTube:
         self.stream_monostate.on_complete = func
 
     @staticmethod
-    def from_id(video_id: str, innertube=None) -> "YouTube":
+    def from_id(video_id: str, innertube=None, proxies=None) -> "YouTube":
         """Construct a :class:`YouTube <YouTube>` object from a video id.
 
         :param str video_id:
@@ -511,5 +510,7 @@ class YouTube:
 
         """
         return YouTube(
-            f"https://www.youtube.com/watch?v={video_id}", innertube=innertube
+            f"https://www.youtube.com/watch?v={video_id}",
+            innertube=innertube,
+            proxies=proxies,
         )
